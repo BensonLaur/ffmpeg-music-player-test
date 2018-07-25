@@ -92,7 +92,7 @@
      <string>TextLabel</string>
     </property>
    </widget>
-   <widget class="QSlider" name="horizontalSlider_2">
+   <widget class="QSlider" name="soundSlider">
     <property name="geometry">
      <rect>
       <x>550</x>

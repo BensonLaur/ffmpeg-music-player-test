@@ -5,6 +5,7 @@
 #include <QString>
 #include <QThread>
 #include <QPixmap>
+#include <QTimer>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -76,6 +77,7 @@ typedef struct{
     PacketQueue audioq; //音频队列
 
     double audio_clock;
+    uint8_t volume;
 
     PlayThread* playThread;
 
@@ -89,7 +91,8 @@ typedef struct{
 		fct = nullptr;
 		audioq.clear();
 		audio_clock = 0;
-		playThread = nullptr;
+        volume = 128;
+        playThread = nullptr;
 	}
 
 }mediaState;
@@ -108,6 +111,7 @@ protected:
 
 signals:
     void audioFinish();
+    void volumeChanged(uint8_t);    //音量发生改变
     void durationChanged(qint64);   //总长发生改变（单位 微秒 10e-6）
     void positionChanged(qint64);   //位置发生改变（单位 微秒 10e-6）
     void errorOccur(int errorCode, QString errorMessage);
@@ -206,21 +210,28 @@ public:
     };
 
     MusicPlayer(QObject* parent = nullptr);
-	~MusicPlayer() {
-		playThread->AGStatus = AGS_FINISH; //置结束位，并等待线程退出才结束，否则 playThread 的释放会导致访问异常
-		while (playThread->isRunning())
-			_sleep(5);
-	}
+    ~MusicPlayer() ;
 
     void setMusicPath(QString path);
     QString getMusicPath();
 
-//    //音乐文件信息
-//    bool isMusicSupported();
-//    bool isMusicValid();
-//    QString getArtist();
-//    QString getAlbum();
-//    QPixmap getPicture();
+    //音乐文件信息
+    QString getTitle();
+    QString getArtist();
+    QString getAlbum();
+    QPixmap getPicture();
+
+signals:
+    void audioFinish();             //播放完毕
+    void durationChanged(qint64);   //总长发生改变（单位 毫秒）
+    void positionChanged(qint64);   //位置发生改变（单位 毫秒）
+    void volumeChanged(int);    //音量大小发生改变，范围 0-128
+    void errorOccur(QString msg);   //发生错误
+
+    void albumFound(QString);       //发现信息
+    void artistFound(QString);
+    void titleFound(QString);
+    void pictureFound(QPixmap);
 
 public slots:
     //播放控制
@@ -232,24 +243,16 @@ public slots:
     void forwordSeek(quint64 step);  //往后跳（单位 毫秒）
     void backwardSeek(quint64 step); //往回跳（单位 毫秒）
 
-//    void setVolume(unsigned int volume);
-//    unsigned int getVolume();
+    void setVolume(int volume);  //音量大小范围 0-128
+    int getVolume();
     quint64 duration();  //获得当总时长（单位 毫秒）
     quint64 position();  //获得当总位置（单位 毫秒）
 
+    void setNotifyInterval(int msec);   //设置通知间隔（歌曲位置进度）
     Status state();
 
-public:
-signals:
-    void audioFinish();             //播放完毕
-    void durationChanged(qint64);   //总长发生改变（单位 毫秒）
-    void positionChanged(qint64);   //位置发生改变（单位 毫秒）
-    void errorOccur(QString msg);   //发生错误
-
-    void albumFound(QString);       //发现信息
-    void artistFound(QString);
-    void titleFound(QString);
-    void pictureFound(QPixmap);
+private slots:
+    void sendPosChangedSignal();
 
 
 private:
@@ -261,8 +264,10 @@ private:
 
 private:
     QString musicPath;
-    uint8_t m_volume;
     quint64 m_position;              //当前时间（单位 毫秒）
+
+    QTimer  m_positionUpdateTimer;    //通知歌曲进度发生改变的Timer
+    int     m_interval;                //间隔，单位毫秒
 
     PlayThread* playThread;
 

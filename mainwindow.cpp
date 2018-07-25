@@ -12,24 +12,14 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
-
     ui->songSlider->setRange(0,1000);
-
-
-
-    player = new QMediaPlayer(this);
-    player->setNotifyInterval(1);
-
-    connect(player,SIGNAL(mediaStatusChanged(QMediaPlayer::MediaStatus)),this,SLOT(mediaStatusChanged(QMediaPlayer::MediaStatus)));
-    connect(player,SIGNAL(error(QMediaPlayer::Error)),this,SLOT(errorLoading(QMediaPlayer::Error)));
-    connect(player,SIGNAL(durationChanged(qint64)),this,SLOT(durationChanged(qint64)));
-    connect(player,SIGNAL(positionChanged(qint64)),this,SLOT(positionChanged(qint64)));
-
+    ui->soundSlider->setRange(0,128);
 
     musicPlayer = new MusicPlayer(this);
 
     connect(musicPlayer, SIGNAL(durationChanged(qint64)),this,SLOT(durationChanged(qint64)));
     connect(musicPlayer, SIGNAL(positionChanged(qint64)),this,SLOT(positionChanged(qint64)));
+    connect(musicPlayer,SIGNAL(volumeChanged(int)),this,SLOT(volumeChanged(int)));
 
     connect(musicPlayer, &MusicPlayer::albumFound, [=](QString text){ ui->labelAlbumTip_2->setText(text);});
     connect(musicPlayer, &MusicPlayer::artistFound, [=](QString text){ui->labelArtist->setText(text);});
@@ -38,6 +28,10 @@ MainWindow::MainWindow(QWidget *parent) :
         QPixmap pic2 = pic.scaled(ui->labelPicture->size(),Qt::KeepAspectRatio,Qt::SmoothTransformation);
         ui->labelPicture->setPixmap(pic2);}
     );
+
+    musicPlayer->setNotifyInterval(1);
+
+    AdjustingPos= false;
 }
 
 MainWindow::~MainWindow()
@@ -81,64 +75,6 @@ void MainWindow::on_btnStop_clicked()
     musicPlayer->stop();
 }
 
-void MainWindow::mediaStatusChanged(QMediaPlayer::MediaStatus status)
-{
-    QMessageBox msgBox;
-
-    switch (status) {
-    case QMediaPlayer::MediaStatus::UnknownMediaStatus:
-        msgBox.setText("UnknownMediaStatus.");
-        msgBox.exec();
-        break;
-    case QMediaPlayer::MediaStatus::NoMedia:
-        msgBox.setText("NoMedia.");
-        msgBox.exec();
-        break;
-    case QMediaPlayer::MediaStatus::LoadingMedia:
-        msgBox.setText("LoadingMedia.");
-        msgBox.exec();
-        break;
-    case QMediaPlayer::MediaStatus::LoadedMedia:
-
-        player->play();
-
-        ui->labelSong->setText(currentSong);
-        player->position();
-
-        break;
-    case QMediaPlayer::MediaStatus::StalledMedia:
-        msgBox.setText("StalledMedia.");
-        msgBox.exec();
-        break;
-    case QMediaPlayer::MediaStatus::BufferingMedia:
-        msgBox.setText("BufferingMedia.");
-        msgBox.exec();
-        break;
-    case QMediaPlayer::MediaStatus::EndOfMedia:
-        msgBox.setText("EndOfMedia.");
-        msgBox.exec();
-
-        player->play();
-        break;
-    case QMediaPlayer::MediaStatus::InvalidMedia:
-        msgBox.setText("InvalidMedia.");
-        msgBox.exec();
-        break;
-    default:
-        break;
-    }
-
-
-}
-
-void MainWindow::errorLoading(QMediaPlayer::Error)
-{
-    QMessageBox msgBox;
-    msgBox.setText("error.");
-    msgBox.exec();
-}
-
-
 void MainWindow::durationChanged(qint64 duration)
 {
     int ms = duration % 1000;
@@ -156,7 +92,9 @@ void MainWindow::durationChanged(qint64 duration)
 void MainWindow::positionChanged(qint64 position)
 {
     int pecentOfThousand = int(1.0 * position / musicPlayer->duration() * 1000);
-    ui->songSlider->setValue(pecentOfThousand);
+
+    if(!AdjustingPos)
+        ui->songSlider->setValue(pecentOfThousand);
 
     int ms = position % 1000;
     position = position/1000;
@@ -170,6 +108,11 @@ void MainWindow::positionChanged(qint64 position)
 
 
 
+}
+
+void MainWindow::volumeChanged(int volume)
+{
+     ui->soundSlider->setValue(volume);
 }
 
 void MainWindow::on_btnBack10_clicked()
@@ -190,4 +133,25 @@ void MainWindow::on_reloadMusic_clicked()
         musicPlayer->setMusicPath(currentSong);
         musicPlayer->reload();
     }
+}
+
+void MainWindow::on_soundSlider_valueChanged(int value)
+{
+    musicPlayer->setVolume(value);
+}
+
+void MainWindow::on_songSlider_sliderMoved(int position)
+{
+    posAdjust = musicPlayer->duration() * position / 1000;
+}
+
+void MainWindow::on_songSlider_sliderPressed()
+{
+    AdjustingPos = true;
+}
+
+void MainWindow::on_songSlider_sliderReleased()
+{
+    AdjustingPos = false;
+    musicPlayer->seek(posAdjust);
 }

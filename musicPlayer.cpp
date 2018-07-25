@@ -312,8 +312,8 @@ int PlayThread::audio_decode_frame(mediaState* MS, uint8_t* audio_buf)
             if (len2 < 0)
                 break;
 
-            int resampled_data_size = len2 * MS->wanted_frame->channels* av_get_bytes_per_sample((AVSampleFormat)MS->wanted_frame->format);
-            int n = 2 * MS->acct->channels;
+            //int resampled_data_size = len2 * MS->wanted_frame->channels* av_get_bytes_per_sample((AVSampleFormat)MS->wanted_frame->format);
+            //int n = 2 * MS->acct->channels;
             //MS->audio_clock += (double)resampled_data_size/(double)(n * MS->acct->sample_rate);
             //emit  positionChanged(MS->audio_clock * 1000000);
 
@@ -591,6 +591,8 @@ void PlayThread::playDevice()
 {
     //Play
     SDL_PauseAudio(0);
+
+    emit volumeChanged(m_MS.volume);
 }
 
 void PlayThread::pauseDevice()
@@ -900,7 +902,7 @@ void  PlayThread::fillAudio(void *udata,Uint8 *stream,int len){
                audio_len=len;
 
 
-            SDL_MixAudio(stream, audio_buff+audio_buf_pos, audio_len, SDL_MIX_MAXVOLUME);
+            SDL_MixAudio(stream, audio_buff+audio_buf_pos, audio_len, MS->volume);
             len-=audio_len;
             audio_buf_pos+=audio_len;
             stream+=audio_len;
@@ -913,14 +915,18 @@ void  PlayThread::fillAudio(void *udata,Uint8 *stream,int len){
 
 
 
-MusicPlayer::MusicPlayer(QObject* parent):QObject(parent),m_volume(128)
+MusicPlayer::MusicPlayer(QObject* parent):QObject(parent)
 {
     playThread = new PlayThread(this);
 
     connect(playThread, &PlayThread::audioFinish,[=](){emit audioFinish();});
+    connect(playThread, &PlayThread::volumeChanged,[=](uint8_t volume){
+        emit volumeChanged(volume);
+    }
+    );
     connect(playThread, &PlayThread::durationChanged,[=](qint64 duration){emit durationChanged(duration/1000);});
     connect(playThread, &PlayThread::positionChanged,[=](qint64 position){
-       this->m_position = position/1000;  emit positionChanged(position/1000);});
+       this->m_position = position/1000; });
 
     connect(playThread, &PlayThread::albumFound,[=](QString album){
         m_album=album; emit albumFound(album);}
@@ -929,6 +935,17 @@ MusicPlayer::MusicPlayer(QObject* parent):QObject(parent),m_volume(128)
     connect(playThread, &PlayThread::titleFound,[=](QString title){m_title=title; emit titleFound(title);});
     connect(playThread, &PlayThread::pictureFound,[=](QPixmap picture){m_picture=picture; emit pictureFound(picture);});
 
+    m_interval = 1;
+    m_positionUpdateTimer.setInterval(m_interval);
+    connect(&m_positionUpdateTimer,SIGNAL(timeout()),this, SLOT(sendPosChangedSignal() ));
+
+    m_position = 0;
+}
+
+MusicPlayer::~MusicPlayer() {
+    playThread->AGStatus = AGS_FINISH; //置结束位，并等待线程退出才结束，否则 playThread 的释放会导致访问异常
+    while (playThread->isRunning())
+        _sleep(5);
 }
 
 
@@ -944,11 +961,25 @@ QString MusicPlayer::getMusicPath()
 }
 
 //音乐文件信息
-//    bool isMusicSupported();
-//    bool isMusicValid();
-//    QString getArtist();
-//    QString getAlbum();
-//    QPixmap getPicture();
+QString MusicPlayer::getTitle()
+{
+    return m_title;
+}
+
+QString MusicPlayer::getArtist()
+{
+    return m_artist;
+}
+
+QString MusicPlayer::getAlbum()
+{
+    return m_album;
+}
+
+QPixmap MusicPlayer::getPicture()
+{
+    return m_picture;
+}
 
 //stop() 并 play();
 void MusicPlayer::reload()
@@ -959,6 +990,9 @@ void MusicPlayer::reload()
         _sleep(10); //等待结束
 
     play();
+
+    if(!m_positionUpdateTimer.isActive())
+        m_positionUpdateTimer.start();
 }
 
 
@@ -972,6 +1006,8 @@ void MusicPlayer::play()
     else
         playThread->playDevice();
 
+    if(!m_positionUpdateTimer.isActive())
+        m_positionUpdateTimer.start();
 }
 
 void MusicPlayer::pause()
@@ -991,6 +1027,8 @@ void MusicPlayer::stop()
 			playThread->playDevice();
 	}
 
+    if(m_positionUpdateTimer.isActive())
+        m_positionUpdateTimer.stop();
 }
 
 //跳到时间点播放（单位 毫秒）
@@ -1017,8 +1055,23 @@ void MusicPlayer::backwardSeek(quint64 step)
     seek(step > m_position ? 0: m_position - step);
 }
 
-//    void setVolume(unsigned int volume);
-//    unsigned int getVolume();
+ //音量大小范围 0-128
+void MusicPlayer::setVolume(int volume)
+{
+    if(volume > 128)
+        volume = 128;
+
+    if(volume < 0)
+        volume = 0;
+
+    playThread->m_MS.volume =(uint8_t)volume;
+    emit volumeChanged(volume);
+}
+
+int MusicPlayer::getVolume()
+{
+    return (int)playThread->m_MS.volume;
+}
 
 //获得当总时长（单位 毫秒）
 quint64 MusicPlayer::duration()
@@ -1034,6 +1087,19 @@ quint64 MusicPlayer::position()
 {
     return m_position;
 }
+
+//设置通知间隔（歌曲位置进度）
+void MusicPlayer::setNotifyInterval(int msec)
+{
+    m_interval = msec;
+    m_positionUpdateTimer.setInterval(m_interval);
+}
+
+void MusicPlayer::sendPosChangedSignal()
+{
+    emit positionChanged(m_position);
+}
+
 
 MusicPlayer::Status MusicPlayer::state()
 {
