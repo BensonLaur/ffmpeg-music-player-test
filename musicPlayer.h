@@ -1,6 +1,11 @@
 ﻿#ifndef MUSIC_PLAYER_H
 #define MUSIC_PLAYER_H
 
+#ifndef INT64_C
+#define INT64_C(c) (c ## LL)
+#define UINT64_C(c) (c ## ULL)
+#endif
+
 #include <QObject>
 #include <QString>
 #include <QThread>
@@ -55,14 +60,14 @@ typedef struct PacketQueue {
     SDL_mutex *mutex;
     SDL_cond *cond;
 
-	void clear()
-	{
-		first_pkt = nullptr;
-		last_pkt = nullptr;
-		mutex = nullptr;
-		cond = nullptr;
-		nb_packets = size = 0;
-	}
+    void clear()
+    {
+        first_pkt = nullptr;
+        last_pkt = nullptr;
+        mutex = nullptr;
+        cond = nullptr;
+        nb_packets = size = 0;
+    }
 } PacketQueue;
 
 
@@ -72,8 +77,8 @@ typedef struct{
 
     AVFrame *wanted_frame;//音频目标帧
     AVCodecContext *acct;//音频解码上下文
-	AVStream *aStream;
-	AVStream *vStream;
+    AVStream *aStream;
+    AVStream *vStream;
     PacketQueue audioq; //音频队列
 
     double audio_clock;
@@ -81,19 +86,19 @@ typedef struct{
 
     PlayThread* playThread;
 
-	void clear() //仅仅是清空本结构内容，不负责清空堆栈中的内存
-	{
-		fct = nullptr;
-		wanted_frame = nullptr;
-		acct = nullptr;
-		aStream = nullptr;
-		vStream = nullptr;
-		fct = nullptr;
-		audioq.clear();
-		audio_clock = 0;
+    void clear() //仅仅是清空本结构内容，不负责清空堆栈中的内存
+    {
+        fct = nullptr;
+        wanted_frame = nullptr;
+        acct = nullptr;
+        aStream = nullptr;
+        vStream = nullptr;
+        fct = nullptr;
+        audioq.clear();
+        audio_clock = 0;
         volume = 128;
         playThread = nullptr;
-	}
+    }
 
 }mediaState;
 
@@ -225,7 +230,7 @@ signals:
     void audioFinish();             //播放完毕
     void durationChanged(qint64);   //总长发生改变（单位 毫秒）
     void positionChanged(qint64);   //位置发生改变（单位 毫秒）
-    void volumeChanged(int);    //音量大小发生改变，范围 0-128
+    void volumeChanged(int);        //音量大小发生改变，范围 0-128
     void errorOccur(QString msg);   //发生错误
 
     void albumFound(QString);       //发现信息
